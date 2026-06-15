@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Compile gate for the Android SDK + sample. Builds the release AAR, runs the JVM
+# unit tests, and compiles the sample app (with real Play Billing v9 wiring). No
+# secrets / signing. A real sandbox purchase needs a device + Play Console test
+# track, so the purchase E2E is a device step, not a CI step.
+jobs:
+  android:
+    name: Build SDK + sample + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Gradle build + test
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :sdk:assembleRelease :sdk:test :sdk-ui:assembleRelease :sdk-billing:assembleRelease :sdk-billing:test :sample:assembleDebug --no-daemon --stacktrace

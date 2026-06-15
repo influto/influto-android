@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Required by Google Play Billing so the library can bind to the Play Store service. -->
+    <uses-permission android:name="com.android.vending.BILLING" />
+
+</manifest>
