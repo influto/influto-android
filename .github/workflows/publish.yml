@@ -2,10 +2,15 @@ name: Publish (Maven Central)
 
 # Publishes to.influ:android-sdk / -sdk-ui / -sdk-billing to Maven Central via the Central
 # Portal. Credentials come from repo secrets (MAVEN_CENTRAL_* + SIGNING_IN_MEMORY_KEY*).
-# Manual trigger: bump the version in the build files first, then run this workflow.
 # Requires the `to.influ` namespace to be Verified in the Central Portal.
+#
+# To release: bump the version in the build files, then either publish a GitHub Release
+# (auto-publishes), or run this workflow manually. Re-publishing an already-released
+# version is rejected by the Portal (a harmless failed run), so a notes-only Release is safe.
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
