@@ -13,8 +13,12 @@ import java.util.TimeZone
  */
 internal object DeviceInfo {
 
-    fun trackInstallBody(): JSONObject = JSONObject().apply {
+    fun trackInstallBody(installId: String? = null): JSONObject = JSONObject().apply {
         put("platform", "android")
+        // device_id = SDK-persisted per-install UUID (Storage.INSTALL_ID) —
+        // NOT the advertising ID (still no Ad-ID permission needed). Lets the
+        // backend dedupe launches into installs.
+        if (installId != null) put("device_id", installId)
         put("device_brand", Build.BRAND)
         put("device_model", Build.MODEL)
         put("os_version", Build.VERSION.RELEASE)
@@ -26,6 +30,5 @@ internal object DeviceInfo {
         }
         put("timezone", TimeZone.getDefault().id)
         put("language", Locale.getDefault().toLanguageTag())
-        // device_id intentionally omitted.
     }
 }

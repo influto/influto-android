@@ -29,5 +29,8 @@ internal class Storage(context: Context) {
         const val APP_USER_ID = "@influto/app_user_id"
         const val INITIALIZED = "@influto/initialized"
         const val ACCESS = "@influto/access"
+        // Per-install UUID sent as device_id so the backend counts devices,
+        // not launches. Resets on reinstall (and on prefs clear) by design.
+        const val INSTALL_ID = "@influto/install_id"
     }
 }

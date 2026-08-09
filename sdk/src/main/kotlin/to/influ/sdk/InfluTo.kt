@@ -32,7 +32,7 @@ import java.util.UUID
  */
 object InfluTo {
 
-    private const val SDK_VERSION = "1.0.0"
+    private const val SDK_VERSION = "1.1.0"
 
     private var config: InfluToConfig? = null
     private var storage: Storage? = null
@@ -116,7 +116,9 @@ object InfluTo {
             requireStorage().getString(Storage.ATTRIBUTION)?.let {
                 return JsonCodec.attributionFromJson(JSONObject(it))
             }
-            val resp = requireHttp().postObject("/sdk/track-install", DeviceInfo.trackInstallBody())
+            val resp = requireHttp().postObject(
+                "/sdk/track-install", DeviceInfo.trackInstallBody(installId())
+            )
             val code = resp.strOrNull("referral_code")
             if (resp.optBoolean("attributed", false) && code != null) {
                 val attribution = AttributionResult(
@@ -133,15 +135,58 @@ object InfluTo {
                 setRevenueCatAttributes(code)
                 attribution
             } else {
-                AttributionResult(
+                val organic = AttributionResult(
                     attributed = false,
                     message = resp.strOrNull("message") ?: "No attribution found",
                 )
+                // Persist the ORGANIC result too (contract 1.6.0). Persisting
+                // only attributed results made every organic user re-POST
+                // track-install on every cold start for the app's lifetime.
+                // A failed request (catch below) persists nothing → retried.
+                requireStorage().putString(
+                    Storage.ATTRIBUTION, JsonCodec.attributionToJson(organic).toString()
+                )
+                organic
             }
         } catch (e: Throwable) {
             if (debug) Log.d("InfluTo", "checkAttribution error: ${e.message}")
             AttributionResult(attributed = false, message = "Error checking attribution")
         }
+    }
+
+    /** Per-install UUID, generated once and persisted. See Storage.INSTALL_ID. */
+    private fun installId(): String {
+        val storage = requireStorage()
+        storage.getString(Storage.INSTALL_ID)?.let { return it }
+        val fresh = UUID.randomUUID().toString()
+        storage.putString(Storage.INSTALL_ID, fresh)
+        return fresh
+    }
+
+    /**
+     * Default idempotency key. Once-only monetization events get a
+     * DETERMINISTIC id from (type, user, sorted properties) so cross-launch
+     * re-fires collapse into one server-side row; other events get a uuid.
+     */
+    private fun defaultEventId(
+        eventType: String,
+        appUserId: String,
+        properties: Map<String, Any?>?,
+    ): String {
+        val onceOnly = eventType == "trial_started" ||
+            eventType == "subscription_purchased" ||
+            eventType == "subscription_renewed"
+        if (!onceOnly) return UUID.randomUUID().toString()
+        val canonical = (properties ?: emptyMap())
+            .entries.sortedBy { it.key }
+            .joinToString("&") { "${it.key}=${it.value}" }
+        var h = 0x811c9dc5.toInt()
+        for (ch in canonical) {
+            h = h xor ch.code
+            h *= 0x01000193
+        }
+        val hex = Integer.toHexString(h).padStart(8, '0')
+        return "det:$eventType:$appUserId:$hex"
     }
 
     fun checkAttribution(callback: (Result<AttributionResult>) -> Unit) {
@@ -196,7 +241,7 @@ object InfluTo {
                 put("appUserId", appUserId)
                 if (properties != null) put("properties", JsonCodec.mapToJsonObject(properties))
                 if (referralCode != null) put("referralCode", referralCode)
-                put("eventId", eventId ?: UUID.randomUUID().toString())
+                put("eventId", eventId ?: defaultEventId(eventType, appUserId, properties))
             }
             requireHttp().postObject("/sdk/event", body)
         } catch (e: Throwable) {
